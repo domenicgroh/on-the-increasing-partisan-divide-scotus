@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use these replication materials, please cite the associated paper."
+title: "Replication materials for On the Increasing Partisan Divide of the U.S. Supreme Court"
+type: software
+
+authors:
+  - family-names: "Groh"
+    given-names: "Domenic"
+
+repository-code: "https://github.com/domenicgroh/on-the-increasing-partisan-divide-scotus"
+
+license: MIT
+
+preferred-citation:
+  type: article
+  title: "On the Increasing Partisan Divide of the U.S. Supreme Court"
+  authors:
+    - family-names: "Groh"
+      given-names: "Domenic"
