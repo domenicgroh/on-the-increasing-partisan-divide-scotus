@@ -66,9 +66,13 @@ Required R packages include:
 
 ## License
 
-The analysis code will be released under the MIT License.
+The analysis code in this repository is released under the MIT License.
 
-Third-party source datasets are not covered by the MIT License and remain subject to the terms specified by their original providers.
+Documentation, figures, and other original scholarly materials may be reused
+with appropriate attribution.
+
+Third-party source datasets are not covered by the MIT License and remain
+subject to the terms specified by their original providers.
 
 ## Citation
 
