@@ -6,6 +6,12 @@ This repository contains the replication materials for the paper
 The repository includes the complete analysis code, a rendered analysis PDF,
 and documentation for the source data used in the study.
 
+## Archived replication package
+
+Version 1.0.0 of these replication materials is permanently archived on Zenodo:
+
+**DOI:** [10.5281/zenodo.22697555](https://doi.org/10.5281/zenodo.22697555)
+
 ## Repository contents
 
 - `Analysis.qmd` — Quarto/R source file containing the complete analysis.
