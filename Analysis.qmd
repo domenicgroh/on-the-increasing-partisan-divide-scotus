@@ -1,5 +1,5 @@
 ---
-title: "Data Analysis for 'On the Increasing Partisan Split of the US Supreme Court'"
+title: "Data Analysis for 'On the Increasing Partisan Divide of the US Supreme Court'"
 format: pdf
 editor: visual
 ---
@@ -21,7 +21,8 @@ R.version
 # ---- package setup ----------------------------------------------------------
 required_pkgs <- c(
   "dplyr", "ggplot2", "readxl", "stringr", "purrr", "readr", "tidyr",
-  "tibble", "knitr", "kableExtra", "sandwich", "lmtest", "scales", "devEMF"
+  "tibble", "knitr", "kableExtra", "sandwich", "lmtest", "scales",
+  "devEMF"
 )
 
 install_if_missing <- function(pkgs) {
@@ -111,7 +112,7 @@ message(
 
 ### Purpose
 
-Define the project-level folders and locate the three source files required for the analysis. The code checks the conventional `data/` directory first and then the current working directory. This makes the Quarto document portable while preserving the same project structure used in the other analysis files.
+Define the project-level folders and locate the four source files required for the analysis. The code checks the conventional `data/` directory first and then the current working directory. This makes the Quarto document portable while preserving the same project structure used in the other analysis files.
 
 The substantive analysis uses:
 
@@ -119,7 +120,9 @@ The substantive analysis uses:
 
 - the updated **CSI** covering 2015–2024,
 
-- the **Supreme Court Database (SCDB) Justice-Centered Citation-Organized dataset**.
+- the **Supreme Court Database (SCDB) Justice-Centered Citation-Organized dataset**,
+
+- the published **Clark–Lax–Rice pre-decision salience estimates** used for measurement validation.
 
 The main analysis therefore covers **October Terms 1953–2024**. OT2025/2025–26 is not appended to the principal time series because a directly comparable CSI measure is not yet available for that term.
 
@@ -140,6 +143,8 @@ The main analysis therefore covers **October Terms 1953–2024**. OT2025/2025–
 - **new_csi_zip** — path to `CSI_2015-2024.zip`.
 
 - **scdb_zip** — path to `SCDB_2025_01_justiceCentered_Citation.csv_.zip`.
+
+- **clr_file** — path to `CLRSalienceEstimates100714.RData`.
 
 ```{r Project Directories and Input Files}
 
@@ -183,11 +188,17 @@ new_csi_zip <- resolve_input_path("CSI_2015-2024.zip")
 scdb_zip <- resolve_input_path(
   "SCDB_2025_01_justiceCentered_Citation.csv_.zip")
 
+clr_file <- resolve_input_path(
+  "CLRSalienceEstimates100714.RData"
+)
+
 message("CSI 1953-2014: ", old_csi_file)
 
 message("CSI 2015-2024: ", new_csi_zip)
 
 message("SCDB:          ", scdb_zip)
+
+message("CLR salience:  ", clr_file)
 ```
 
 ## Case Salience Index
@@ -222,7 +233,7 @@ so that:
 
 $$0\leq CSI \leq 8.$$
 
-Higher CSI values therefore indicate greater contemporaneous public/media salience. Most importantly, the CSI is a **salience measure**, not a direct measure of ideological content or partisan controversy.
+Higher CSI values therefore indicate greater contemporaneous public/media salience. Most importantly, the CSI is a **salience measure**, not a direct measure of ideological content or partisan controversy. Because the index partly reflects coverage published after the decision, however, decision-stage attention can potentially respond to features of the announced result. The analysis therefore retains CSI as the principal long-run measure of contemporaneous media salience while evaluating this timing concern directly in the later pre-decision and contamination checks.
 
 Because the CSI does not provide an official threshold defining a “high-salience” case, the descriptive analyses examine several thresholds: **CSI ≥ 3, CSI ≥ 4, CSI ≥ 5, CSI ≥ 6, and CSI ≥ 7**. This allows the analysis to assess whether the historical results depend on the chosen salience threshold. Inferential analyses will additionally retain CSI as a continuous variable.
 
@@ -692,7 +703,7 @@ For each case, participating justice votes form the following $2 \times 2$ table
 
 The phi coefficient is:
 
-$$\phi = \frac{ad-bc} {\sqrt{(a+b)(c+d)(b+d)}}$$
+$$\phi = \frac{ad-bc} {\sqrt{(a+b)(a+c)(c+d)(b+d)}}$$
 
 Because the substantive question concerns the **strength of party sorting**, rather than whether Republican- or Democratic-appointed justices occupy the majority side, the analysis uses the absolute value:
 
@@ -861,6 +872,7 @@ SCDB_CaseVotes <- SCDB_JusticeVotes %>% dplyr::group_by(caseId) %>%
     # -----------------------------------------------------------------------
     
     term_scdb    = dplyr::first(term),
+    dateArgument = dplyr::first(dateArgument),
     dateDecision = dplyr::first(dateDecision),
     caseName     = dplyr::first(caseName),
     usCite       = dplyr::first(usCite),
@@ -997,7 +1009,7 @@ message(
 
 ### Purpose
 
-Merge the independent Case Salience Index data with the reconstructed case-level voting-coalition data.
+Merge the Case Salience Index data with the reconstructed case-level voting-coalition data.
 
 The principal analysis sample consists of:
 
@@ -1244,13 +1256,9 @@ if (nrow(unmatched_csi_cases) > 0) {
 
 ### Purpose
 
-The following chunk defines helper functions and the centered rolling-window terms used throughout the descriptive analysis.
+The following chunk defines helper functions and the trailing rolling-window terms used throughout the descriptive analysis.
 
-The principal rolling analyses use the five-Supreme-Court-term window defined in the Setup section. With a five-term centered window, the value associated with term tt pools cases from:
-
-$$t-2,  t-1,  t,  t+1,  t+2$$
-
-Using a centered window reduces term-to-term instability while preserving the long-run temporal pattern. Because a complete centered window cannot be calculated at the beginning or end of the analysis period, the rolling series begins at OT1955 and ends at OT2022.
+The principal rolling analyses use the five-Supreme-Court-term window defined in the Setup section. The value associated with term $t$ pools that term and up to the preceding four terms. The series therefore begins at OT1953 with expanding partial windows and uses complete five-term windows from OT1957 onward, allowing the descriptive series to extend through OT2024.
 
 Helper functions are also defined for means, medians, and proportions so that groups containing only missing observations return `NA` rather than `NaN`.
 
@@ -1262,56 +1270,40 @@ Helper functions are also defined for means, medians, and proportions so that gr
 
 - **safe_rate()** — calculates a proportion from a logical variable while safely handling missing observations.
 
-- **rolling_half_window** — number of terms on each side of the center term.
+- **rolling_years** — Supreme Court terms at which trailing estimates are reported.
 
-- **window_centers** — center terms for which a complete rolling window is available.
+- **rolling_lookback** — number of preceding terms added to each trailing window.
 
 ```{r descriptive-analysis-setup}
 
 # --- Descriptive-analysis helpers -------------------------------------------
 
 safe_mean <- function(x) {
-  
   x <- x[!is.na(x)]
-  
-  if (length(x) == 0) {
-    return(NA_real_)
-  }
-  
+  if (length(x) == 0) return(NA_real_)
   mean(x)
 }
 
 safe_median <- function(x) {
-  
   x <- x[!is.na(x)]
-  
-  if (length(x) == 0) {
-    return(NA_real_)
-  }
-  
+  if (length(x) == 0) return(NA_real_)
   stats::median(x)
 }
 
 safe_rate <- function(x) {
-  
   safe_mean(as.numeric(x))
 }
 
 # ---------------------------------------------------------------------------
-# Rolling-window definition
+# Trailing rolling-window definition
 # ---------------------------------------------------------------------------
 
-stopifnot(rolling_window_terms %% 2 == 1)
-
-rolling_half_window <- as.integer((rolling_window_terms - 1) / 2)
-
-window_centers <- seq.int(
-  analysis_start_term + rolling_half_window,
-  analysis_end_term - rolling_half_window)
+rolling_years <- seq.int(analysis_start_term, analysis_end_term)
+rolling_lookback <- rolling_window_terms - 1L
 
 message(
-  "Centered rolling series: OT", min(window_centers), "-OT",
-  max(window_centers), " using ", rolling_window_terms,
+  "Trailing rolling series: OT", min(rolling_years), "-OT",
+  max(rolling_years), " using up to ", rolling_window_terms,
   " Supreme Court terms per window.")
 ```
 
@@ -2150,49 +2142,6 @@ ggplot2::ggsave(
     6.8, units = "in")
 ```
 
-## High- Versus Lower-Salience Cases Across CSI Thresholds
-
-### Purpose
-
-The following code calculates five-term rolling appointing-party alignment separately for cases above and below each CSI threshold.
-
-Earlier versions of the analysis plotted the high- and low-salience series directly, but that figure has been superseded by the subsequent **salience-gap analysis**, which presents the same comparison more directly as the difference between the two groups. These estimates are nonetheless retained because they are used to calculate the subsequent salience gaps.
-
-### Created objects
-
-- **Rolling_Phi_HighLow** — five-term rolling estimates of raw absolute phi, margin-normalized phi, and strict appointing-party split rates separately for cases above and below each CSI cutoff.
-
-```{r rolling-high-low-salience}
-
-# --- Five-term rolling high-versus-low salience comparison ------------------
-
-Rolling_Phi_HighLow <- purrr::map_dfr(
-  csi_cutoffs, function(k) {
-    
-    purrr::map_dfr(
-      window_centers, function(t) {
-        
-        SCOTUS_Contested %>% dplyr::filter(
-            term >= t - rolling_half_window, term <= t + rolling_half_window
-) %>% dplyr::mutate(
-            
-            Salience_Group = dplyr::if_else(csi >= k, "High", "Low")) %>%
-          dplyr::group_by(Salience_Group) %>% dplyr::summarise(
-            
-            N_Cases = dplyr::n(),
-            
-            Mean_Phi = safe_mean(phi_abs),
-            
-            Mean_Phi_Normalized = safe_mean(phi_normalized),
-            
-            Strict_Split_Rate = safe_rate(strict_party_split),
-            
-            .groups = "drop") %>%
-          dplyr::mutate(Center_Term = t, CSI_Cutoff = k)
-      })
-  })
-```
-
 ## Five-Term Rolling Salience-Band Gaps
 
 ### Purpose
@@ -2732,6 +2681,8 @@ This data-driven breakpoint is distinct from the theoretically motivated OT2010 
 
 - **Breakpoint_Search_Normalized** — normalized-phi breakpoint search results.
 
+- **estimated_break_term** — raw-phi breakpoint carried into later validation analyses.
+
 - **Breakpoint_Bootstrap** — term-cluster bootstrap distribution of estimated breakpoint terms.
 
 - **Breakpoint_Summary** — point estimates, bootstrap intervals, and pre-/post-break CSI slopes.
@@ -2903,6 +2854,9 @@ Breakpoint_Best_Raw <- Breakpoint_Search_Raw %>%
 
 Breakpoint_Best_Normalized <- Breakpoint_Search_Normalized %>%
   dplyr::arrange(RSS, Break_Term) %>% dplyr::slice(1)
+
+estimated_break_term <- as.integer(
+  Breakpoint_Best_Raw$Break_Term[[1]])
 
 # ---------------------------------------------------------------------------
 # Term-cluster bootstrap
@@ -3779,6 +3733,10 @@ The model uses CSI as a continuous predictor, includes October Term fixed effect
 
 - `Contested_CSI_Table` — publication-facing regression table.
 
+- `Contested_CSI_Fit` — full and incremental R-squared for the contested-decision regressions.
+
+- `Contested_CSI_Fit_Table` — compact companion model-fit table.
+
 ```{r contested-case-regressions}
 
 # --- CSI regression models --------------------------------------------------
@@ -4007,6 +3965,80 @@ knitr::kable(
   booktabs = TRUE,
   align = c("l", "r", "r", "l", "r", "r", "r")
 )
+
+# ---------------------------------------------------------------------------
+# Model-fit information
+# ---------------------------------------------------------------------------
+
+model_fit_r2 <- function(
+    full_model, reduced_model, outcome, specification, added_terms) {
+
+  if (stats::nobs(full_model) != stats::nobs(reduced_model) ||
+      !identical(
+        rownames(stats::model.frame(full_model)),
+        rownames(stats::model.frame(reduced_model)))) {
+    stop("Full and reduced models must use exactly the same observations.")
+  }
+
+  full_r2 <- summary(full_model)$r.squared
+  reduced_r2 <- summary(reduced_model)$r.squared
+
+  tibble::tibble(
+    Outcome = outcome,
+    Specification = specification,
+    Added_Terms = added_terms,
+    N = as.integer(stats::nobs(full_model)),
+    Reduced_R2 = as.numeric(reduced_r2),
+    R2 = as.numeric(full_r2),
+    Incremental_R2 = as.numeric(full_r2 - reduced_r2))
+}
+
+m_contested_csi_all_reduced <- stats::lm(
+  contested_case ~ factor(term),
+  data = Contested_CSI_Data)
+
+m_contested_csi_periods_reduced <- purrr::map(
+  Contested_CSI_Period_Data,
+  function(data_i) {
+    stats::lm(
+      contested_case ~ factor(term),
+      data = data_i)
+  })
+
+Contested_CSI_Fit_Overall <- model_fit_r2(
+  full_model = m_contested_csi_all,
+  reduced_model = m_contested_csi_all_reduced,
+  outcome = "Contested decision",
+  specification = "OT1953-OT2024",
+  added_terms = "CSI")
+
+Contested_CSI_Fit_By_Period <- purrr::map_dfr(
+  names(m_contested_csi_periods),
+  function(period_i) {
+    model_fit_r2(
+      full_model = m_contested_csi_periods[[period_i]],
+      reduced_model = m_contested_csi_periods_reduced[[period_i]],
+      outcome = "Contested decision",
+      specification = period_i,
+      added_terms = "CSI")
+  })
+
+Contested_CSI_Fit <- dplyr::bind_rows(
+  Contested_CSI_Fit_Overall,
+  Contested_CSI_Fit_By_Period)
+
+Contested_CSI_Fit_Table <- Contested_CSI_Fit %>%
+  dplyr::transmute(
+    Period = Specification,
+    `R²` = sprintf("%.4f", R2),
+    `Incremental R²` = sprintf("%.4f", Incremental_R2))
+
+knitr::kable(
+  Contested_CSI_Fit_Table,
+  caption = "Model fit for contested-decision regressions",
+  booktabs = TRUE,
+  align = c("l", "r", "r"))
+
 ```
 
 ## Breakpoint Diagnostics
@@ -4357,6 +4389,10 @@ Raw absolute phi is the principal outcome. Margin-normalized phi is estimated in
 
 - **Inferential_Model_Table** — publication-facing model summary.
 
+- **Inferential_Model_Fit** — full and incremental R-squared for the principal linear models.
+
+- **Inferential_Model_Fit_Table** — compact companion model-fit table.
+
 ```{r main-inferential-models}
 
 # --- Main inferential models -------------------------------------------------
@@ -4594,21 +4630,1133 @@ knitr::kable(
   Inferential_Model_Table, caption =
     "Case salience and appointing-party alignment over time", booktabs =
     TRUE, align = c("l", "l", "l", "r", "r", "l", "r"))
+
+# ---------------------------------------------------------------------------
+# Companion model-fit table
+# ---------------------------------------------------------------------------
+
+m_phi_base <- stats::lm(
+  phi_abs ~ csi + factor(term),
+  data = Model_Data)
+
+m_phi_normalized_base <- stats::lm(
+  phi_normalized ~ csi + factor(term),
+  data = Model_Data)
+
+Inferential_Model_Fit <- dplyr::bind_rows(
+  model_fit_r2(
+    full_model = m_phi_time,
+    reduced_model = m_phi_base,
+    outcome = "Mean absolute phi",
+    specification = "Continuous time",
+    added_terms = "CSI × time"),
+  model_fit_r2(
+    full_model = m_phi_normalized_time,
+    reduced_model = m_phi_normalized_base,
+    outcome = "Margin-normalized phi",
+    specification = "Continuous time",
+    added_terms = "CSI × time"),
+  model_fit_r2(
+    full_model = m_phi_post2010,
+    reduced_model = m_phi_base,
+    outcome = "Mean absolute phi",
+    specification = "OT2010 break",
+    added_terms = "CSI × post-2010"),
+  model_fit_r2(
+    full_model = m_phi_normalized_post2010,
+    reduced_model = m_phi_normalized_base,
+    outcome = "Margin-normalized phi",
+    specification = "OT2010 break",
+    added_terms = "CSI × post-2010"))
+
+Inferential_Model_Fit_Table <- Inferential_Model_Fit %>%
+  dplyr::transmute(
+    Outcome,
+    Specification,
+    `R²` = sprintf("%.4f", R2),
+    `Incremental R²` = sprintf("%.4f", Incremental_R2))
+
+knitr::kable(
+  Inferential_Model_Fit_Table,
+  caption = "Model fit for principal linear models",
+  booktabs = TRUE,
+  align = c("l", "l", "r", "r"))
+
+```
+
+# Salience-Measurement Diagnostics
+
+## Clark–Lax–Rice pre-decision salience data
+
+### Purpose
+
+Load the Clark–Lax–Rice pre-decision salience estimates, merge them with the case-level voting data, and construct the contested validation sample. Pre-decision salience is standardized within the overlap, which covers OT1955–OT2008.
+
+**Created objects**
+
+- **CLR_PreDecision** — case-level Clark–Lax–Rice pre-decision salience estimates.
+
+- **CLR_CaseData** — case-level Supreme Court data with the pre-decision salience estimates merged by case ID.
+
+- **CLR_Contested** — contested cases used for the pre-decision salience validation.
+
+- **CLR_TermMismatches** — diagnostic table identifying inconsistent Supreme Court term coding across the merged datasets.
+
+- **CLR_MergeDiagnostics** — summary of the CLR overlap and resulting validation sample.
+
+```{r clr-predecision-import-merge, warning=FALSE, message=FALSE}
+
+# --- Clark-Lax-Rice pre-decision salience -----------------------------------
+# Load the published early-salience estimates and merge them by caseId.
+
+clr_env <- new.env()
+clr_loaded_objects <- load(clr_file, envir = clr_env)
+
+if (!"salienceEstimates" %in% clr_loaded_objects) {
+  stop(
+    "The object 'salienceEstimates' was not found in ",
+    basename(clr_file), ". Objects found: ",
+    paste(clr_loaded_objects, collapse = ", "))
+}
+
+clr_raw <- as.data.frame(clr_env$salienceEstimates)
+required_clr_columns <- c(
+  "salienceData.caseId", "early.salience.est", "early.salience.sd")
+missing_clr_columns <- setdiff(required_clr_columns, names(clr_raw))
+
+if (length(missing_clr_columns) > 0) {
+  stop(
+    "Required Clark-Lax-Rice columns missing: ",
+    paste(missing_clr_columns, collapse = ", "))
+}
+
+# ---------------------------------------------------------------------------
+# Harmonize the Clark-Lax-Rice data
+# ---------------------------------------------------------------------------
+
+CLR_PreDecision <- clr_raw %>%
+  dplyr::transmute(
+    caseId = as.character(salienceData.caseId),
+    clr_pre_salience = as.numeric(early.salience.est),
+    clr_pre_salience_sd = as.numeric(early.salience.sd),
+    term_clr = as.integer(stringr::str_extract(caseId, "^\\d{4}"))) %>%
+  dplyr::arrange(term_clr, caseId)
+
+stopifnot(!anyDuplicated(CLR_PreDecision$caseId))
+stopifnot(!anyNA(CLR_PreDecision$caseId))
+stopifnot(min(CLR_PreDecision$term_clr, na.rm = TRUE) == 1955L)
+stopifnot(max(CLR_PreDecision$term_clr, na.rm = TRUE) == 2008L)
+
+# ---------------------------------------------------------------------------
+# Merge with the existing case-level dataset
+# ---------------------------------------------------------------------------
+
+CLR_CaseData <- SCOTUS_CaseData %>%
+  dplyr::left_join(CLR_PreDecision, by = "caseId")
+
+CLR_TermMismatches <- CLR_CaseData %>%
+  dplyr::filter(!is.na(term_clr), !is.na(term), term_clr != term) %>%
+  dplyr::select(caseId, term, term_clr)
+
+if (nrow(CLR_TermMismatches) > 0) {
+  print(CLR_TermMismatches)
+  stop("At least one CLR case has an inconsistent Supreme Court term.")
+}
+
+# ---------------------------------------------------------------------------
+# Principal CLR validation sample
+# ---------------------------------------------------------------------------
+
+CLR_Contested <- CLR_CaseData %>%
+  dplyr::filter(
+    !is.na(clr_pre_salience), contested_2plus,
+    !is.na(phi_abs), !is.na(phi_normalized)) %>%
+  dplyr::mutate(
+    clr_pre_z = as.numeric(scale(clr_pre_salience)),
+    CLR_Time_Decade =
+      (term - min(term, na.rm = TRUE)) / 10,
+    CLR_PostBreak = as.integer(term >= estimated_break_term))
+
+if (nrow(CLR_Contested) == 0) {
+  stop("No contested cases matched the CLR pre-decision salience data.")
+}
+
+if (!any(CLR_Contested$CLR_PostBreak == 0) ||
+    !any(CLR_Contested$CLR_PostBreak == 1)) {
+  stop(
+    "The CLR validation sample does not contain observations ",
+    "on both sides of the estimated breakpoint.")
+}
+
+# ---------------------------------------------------------------------------
+# Merge diagnostics
+# ---------------------------------------------------------------------------
+
+CLR_MergeDiagnostics <- tibble::tibble(
+  Diagnostic = c(
+    "Cases in CLR source file",
+    "CLR cases matched to CSI case universe",
+    "Contested CLR validation cases",
+    "First validation term",
+    "Last validation term",
+    paste0("Cases before OT", estimated_break_term),
+    paste0("Cases from OT", estimated_break_term, " onward")),
+  Value = c(
+    nrow(CLR_PreDecision),
+    sum(!is.na(CLR_CaseData$clr_pre_salience)),
+    nrow(CLR_Contested),
+    min(CLR_Contested$term, na.rm = TRUE),
+    max(CLR_Contested$term, na.rm = TRUE),
+    sum(CLR_Contested$term < estimated_break_term),
+    sum(CLR_Contested$term >= estimated_break_term)))
+
+knitr::kable(
+  CLR_MergeDiagnostics,
+  caption = "Clark-Lax-Rice pre-decision salience merge diagnostics",
+  col.names = c("Diagnostic", "Value"),
+  align = c("l", "r"), booktabs = TRUE)
+
+cat("\nPre-decision salience summary in the validation sample:\n")
+print(summary(CLR_Contested$clr_pre_salience))
+
+rm(
+  clr_env, clr_raw, clr_loaded_objects,
+  required_clr_columns, missing_clr_columns)
+```
+
+## Pre-decision salience models
+
+### Purpose
+
+Estimate continuous-time and carried-over-breakpoint interactions for raw and margin-normalized `|\phi|` with Supreme Court term fixed effects and term-clustered inference. The breakpoint identified in the principal raw-`|\phi|` analysis is carried over unchanged rather than re-estimated from the CLR data.
+
+**Created objects**
+
+- **m_clr_phi_time** — raw-∣ϕ∣\|\\phi\| model allowing the pre-decision salience slope to change continuously over time.
+
+- **m_clr_phi_normalized_time** — corresponding margin-normalized-∣ϕ∣\|\\phi\| model.
+
+- **m_clr_phi_break** — raw-∣ϕ∣\|\\phi\| model using the breakpoint carried over from the principal analysis.
+
+- **m_clr_phi_normalized_break** — corresponding margin-normalized-∣ϕ∣\|\\phi\| breakpoint model.
+
+- **CLR_PreDecision_Results** — clustered estimates from the pre-decision salience models.
+
+- **CLR_PreDecision_Table** — reader-facing summary of the pre-decision model estimates.
+
+- **CLR_PreDecision_Fit** — full and incremental R2R\^2 values for the pre-decision salience models.
+
+- **CLR_PreDecision_Fit_Table** — compact companion model-fit table.
+
+```{r clr-predecision-models, warning=FALSE}
+
+# --- Pre-decision salience and appointing-party alignment ------------------
+
+clr_cluster_df <- dplyr::n_distinct(CLR_Contested$term) - 1L
+
+# ---------------------------------------------------------------------------
+# Continuous historical change
+# ---------------------------------------------------------------------------
+
+m_clr_phi_time <- stats::lm(
+  phi_abs ~ clr_pre_z + clr_pre_z:CLR_Time_Decade + factor(term),
+  data = CLR_Contested)
+vcov_clr_phi_time <- cluster_vcov(m_clr_phi_time, CLR_Contested$term)
+
+m_clr_phi_normalized_time <- stats::lm(
+  phi_normalized ~ clr_pre_z +
+    clr_pre_z:CLR_Time_Decade + factor(term),
+  data = CLR_Contested)
+vcov_clr_phi_normalized_time <- cluster_vcov(
+  m_clr_phi_normalized_time, CLR_Contested$term)
+
+# ---------------------------------------------------------------------------
+# Main-analysis breakpoint carried into the CLR validation
+# ---------------------------------------------------------------------------
+
+m_clr_phi_break <- stats::lm(
+  phi_abs ~ clr_pre_z + clr_pre_z:CLR_PostBreak + factor(term),
+  data = CLR_Contested)
+vcov_clr_phi_break <- cluster_vcov(m_clr_phi_break, CLR_Contested$term)
+
+m_clr_phi_normalized_break <- stats::lm(
+  phi_normalized ~ clr_pre_z + clr_pre_z:CLR_PostBreak + factor(term),
+  data = CLR_Contested)
+vcov_clr_phi_normalized_break <- cluster_vcov(
+  m_clr_phi_normalized_break, CLR_Contested$term)
+
+# ---------------------------------------------------------------------------
+# Extract quantities of substantive interest
+# ---------------------------------------------------------------------------
+
+clr_break_label <- paste0(
+  "CLR pre-decision salience: OT", estimated_break_term, " break")
+
+CLR_PreDecision_Results <- dplyr::bind_rows(
+  cluster_contrast(
+    model = m_clr_phi_time,
+    vcov_matrix = vcov_clr_phi_time,
+    weights = c("clr_pre_z:CLR_Time_Decade" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Mean absolute phi",
+    specification = "CLR pre-decision salience: continuous time",
+    quantity = "Change in salience slope per decade"),
+  cluster_contrast(
+    model = m_clr_phi_normalized_time,
+    vcov_matrix = vcov_clr_phi_normalized_time,
+    weights = c("clr_pre_z:CLR_Time_Decade" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Margin-normalized phi",
+    specification = "CLR pre-decision salience: continuous time",
+    quantity = "Change in salience slope per decade"),
+  cluster_contrast(
+    model = m_clr_phi_break,
+    vcov_matrix = vcov_clr_phi_break,
+    weights = c("clr_pre_z" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Mean absolute phi",
+    specification = clr_break_label,
+    quantity = "Pre-break salience slope"),
+  cluster_contrast(
+    model = m_clr_phi_break,
+    vcov_matrix = vcov_clr_phi_break,
+    weights = c(
+      "clr_pre_z" = 1,
+      "clr_pre_z:CLR_PostBreak" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Mean absolute phi",
+    specification = clr_break_label,
+    quantity = "Post-break salience slope"),
+  cluster_contrast(
+    model = m_clr_phi_break,
+    vcov_matrix = vcov_clr_phi_break,
+    weights = c("clr_pre_z:CLR_PostBreak" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Mean absolute phi",
+    specification = clr_break_label,
+    quantity = "Change in salience slope"),
+  cluster_contrast(
+    model = m_clr_phi_normalized_break,
+    vcov_matrix = vcov_clr_phi_normalized_break,
+    weights = c("clr_pre_z" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Margin-normalized phi",
+    specification = clr_break_label,
+    quantity = "Pre-break salience slope"),
+  cluster_contrast(
+    model = m_clr_phi_normalized_break,
+    vcov_matrix = vcov_clr_phi_normalized_break,
+    weights = c(
+      "clr_pre_z" = 1,
+      "clr_pre_z:CLR_PostBreak" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Margin-normalized phi",
+    specification = clr_break_label,
+    quantity = "Post-break salience slope"),
+  cluster_contrast(
+    model = m_clr_phi_normalized_break,
+    vcov_matrix = vcov_clr_phi_normalized_break,
+    weights = c("clr_pre_z:CLR_PostBreak" = 1),
+    cluster_df = clr_cluster_df,
+    outcome = "Margin-normalized phi",
+    specification = clr_break_label,
+    quantity = "Change in salience slope"))
+
+CLR_PreDecision_Table <- CLR_PreDecision_Results %>%
+  dplyr::mutate(
+    `95% CI` = sprintf("%.3f to %.3f", CI_Lower, CI_Upper),
+    `p value` = dplyr::if_else(
+      P_Value < 0.001, "<0.001", sprintf("%.3f", P_Value))) %>%
+  dplyr::transmute(
+    Outcome, Specification, Quantity,
+    Estimate = round(Estimate, 3),
+    `Clustered SE` = round(Clustered_SE, 3),
+    `95% CI`, `p value`)
+
+knitr::kable(
+  CLR_PreDecision_Table,
+  caption = "Pre-decision salience and appointing-party alignment",
+  booktabs = TRUE,
+  align = c("l", "l", "l", "r", "r", "l", "r"))
+
+rm(clr_break_label)
+
+# ---------------------------------------------------------------------------
+# Companion model-fit table
+# ---------------------------------------------------------------------------
+
+m_clr_phi_base <- stats::lm(
+  phi_abs ~ clr_pre_z + factor(term),
+  data = CLR_Contested)
+
+m_clr_phi_normalized_base <- stats::lm(
+  phi_normalized ~ clr_pre_z + factor(term),
+  data = CLR_Contested)
+
+CLR_PreDecision_Fit <- dplyr::bind_rows(
+  model_fit_r2(
+    full_model = m_clr_phi_time,
+    reduced_model = m_clr_phi_base,
+    outcome = "Mean absolute phi",
+    specification = "Continuous time",
+    added_terms = "Pre-decision salience × time"),
+  model_fit_r2(
+    full_model = m_clr_phi_normalized_time,
+    reduced_model = m_clr_phi_normalized_base,
+    outcome = "Margin-normalized phi",
+    specification = "Continuous time",
+    added_terms = "Pre-decision salience × time"),
+  model_fit_r2(
+    full_model = m_clr_phi_break,
+    reduced_model = m_clr_phi_base,
+    outcome = "Mean absolute phi",
+    specification = paste0("OT", estimated_break_term, " break"),
+    added_terms = "Pre-decision salience × post-break"),
+  model_fit_r2(
+    full_model = m_clr_phi_normalized_break,
+    reduced_model = m_clr_phi_normalized_base,
+    outcome = "Margin-normalized phi",
+    specification = paste0("OT", estimated_break_term, " break"),
+    added_terms = "Pre-decision salience × post-break"))
+
+CLR_PreDecision_Fit_Table <- CLR_PreDecision_Fit %>%
+  dplyr::transmute(
+    Outcome,
+    Specification,
+    `R²` = sprintf("%.4f", R2),
+    `Incremental R²` = sprintf("%.4f", Incremental_R2))
+
+knitr::kable(
+  CLR_PreDecision_Fit_Table,
+  caption = "Model fit for pre-decision salience models",
+  booktabs = TRUE,
+  align = c("l", "l", "r", "r"))
+
+```
+
+## Figure 3: Pre-decision salience relationships
+
+### Purpose
+
+Visualize the two salience slopes implied by the pooled carried-over-breakpoint models. The fitted relationships use the common central support of pre-decision salience in the pre- and post-break periods.
+
+- **CLR_Break_Lines** — model-implied pre-decision salience relationships before and after the carried-over breakpoint.
+
+- **CLR_LineLabels** — positions used to label the fitted period-specific relationships directly in the figure.
+
+- **p_clr_predecision_break** — Figure 3 showing the fitted pre-decision salience relationships for raw and margin-normalized ∣ϕ∣\|\\phi\|.
+
+```{r figure-3-clr-predecision-break, warning=FALSE}
+# ---------------------------------------------------------------------------
+# Figure 3
+# Pre-decision salience and appointment-party division before/after 2005
+#
+# Required existing objects:
+#   CLR_Contested
+#   m_clr_phi_break
+#   vcov_clr_phi_break
+#   m_clr_phi_normalized_break
+#   vcov_clr_phi_normalized_break
+#   fig_dir
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# 1. Common plotting range for standardized pre-decision salience
+#
+# Restrict the figure to the common 5th–95th percentile support of salience
+# in the pre- and post-break periods.
+# ---------------------------------------------------------------------------
+
+CLR_PlotSupport <- CLR_Contested %>%
+  dplyr::group_by(CLR_PostBreak) %>%
+  dplyr::summarise(
+    Lower = stats::quantile(clr_pre_z, 0.05, na.rm = TRUE),
+    Upper = stats::quantile(clr_pre_z, 0.95, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+clr_plot_min <- max(CLR_PlotSupport$Lower)
+clr_plot_max <- min(CLR_PlotSupport$Upper)
+
+clr_salience_grid <- seq(
+  clr_plot_min,
+  clr_plot_max,
+  length.out = 150
+)
+
+
+# ---------------------------------------------------------------------------
+# 2. Helper function
+#
+# Generate model-implied fitted relationships from the existing pooled
+# breakpoint model. No separate pre/post regressions are estimated here.
+# ---------------------------------------------------------------------------
+
+make_clr_break_lines <- function(
+    model,
+    vcov_matrix,
+    data,
+    outcome_label,
+    salience_grid
+) {
+  
+  beta <- stats::coef(model)
+  keep <- names(beta)[!is.na(beta)]
+  
+  beta <- beta[keep]
+  
+  V <- vcov_matrix[
+    keep,
+    keep,
+    drop = FALSE
+  ]
+  
+  X <- stats::model.matrix(model)
+  X <- X[, keep, drop = FALSE]
+  
+  base_col <- "clr_pre_z"
+  
+  interaction_col <- grep(
+    "clr_pre_z:CLR_PostBreak|CLR_PostBreak:clr_pre_z",
+    colnames(X),
+    value = TRUE
+  )
+  
+  if (length(interaction_col) != 1L) {
+    stop(
+      "Could not uniquely identify the CLR breakpoint interaction."
+    )
+  }
+  
+  # Remove the salience contribution, leaving the fitted baseline structure.
+  X_baseline <- X
+  
+  X_baseline[, base_col] <- 0
+  X_baseline[, interaction_col] <- 0
+  
+  cluster_df <- dplyr::n_distinct(data$term) - 1L
+  critical_value <- stats::qt(0.975, df = cluster_df)
+  
+  periods <- list(
+    "1955–2004" = which(data$CLR_PostBreak == 0),
+    "2005–2008" = which(data$CLR_PostBreak == 1)
+  )
+  
+  purrr::map_dfr(
+    names(periods),
+    function(period_label) {
+      
+      rows <- periods[[period_label]]
+      
+      # Average the term-specific baseline over observations in each period.
+      baseline_design <- colMeans(
+        X_baseline[rows, , drop = FALSE]
+      )
+      
+      # Salience-slope design vector.
+      slope_design <- stats::setNames(
+        rep(0, length(beta)),
+        names(beta)
+      )
+      
+      slope_design[base_col] <- 1
+      
+      if (period_label == "2005–2008") {
+        slope_design[interaction_col] <- 1
+      }
+      
+      purrr::map_dfr(
+        salience_grid,
+        function(z) {
+          
+          design <- baseline_design + z * slope_design
+          
+          estimate <- sum(design * beta)
+          
+          variance <- as.numeric(
+            t(design) %*%
+              V %*%
+              design
+          )
+          
+          se <- sqrt(max(variance, 0))
+          
+          tibble::tibble(
+            clr_pre_z = z,
+            Estimate = estimate,
+            CI_Lower =
+              estimate - critical_value * se,
+            CI_Upper =
+              estimate + critical_value * se,
+            Period = period_label,
+            Outcome = outcome_label
+          )
+        }
+      )
+    }
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# 3. Generate fitted relationships
+# ---------------------------------------------------------------------------
+
+CLR_Break_Lines <- dplyr::bind_rows(
+  
+  make_clr_break_lines(
+    model = m_clr_phi_break,
+    vcov_matrix = vcov_clr_phi_break,
+    data = CLR_Contested,
+    outcome_label = "Absolute |φ|",
+    salience_grid = clr_salience_grid
+  ),
+  
+  make_clr_break_lines(
+    model = m_clr_phi_normalized_break,
+    vcov_matrix = vcov_clr_phi_normalized_break,
+    data = CLR_Contested,
+    outcome_label = "Margin-normalized |φ|",
+    salience_grid = clr_salience_grid
+  )
+  
+) %>%
+  dplyr::mutate(
+    
+    Outcome = factor(
+      Outcome,
+      levels = c(
+        "Absolute |φ|",
+        "Margin-normalized |φ|"
+      )
+    ),
+    
+    Period = factor(
+      Period,
+      levels = c(
+        "1955–2004",
+        "2005–2008"
+      )
+    )
+  )
+
+
+# ---------------------------------------------------------------------------
+# 4. Common y-axis range
+#
+# Use the same scale in both panels, based on the actual fitted relationships
+# and their 95% confidence intervals.
+# ---------------------------------------------------------------------------
+
+clr_y_min_raw <- min(
+  CLR_Break_Lines$CI_Lower,
+  na.rm = TRUE
+)
+
+clr_y_max_raw <- max(
+  CLR_Break_Lines$CI_Upper,
+  na.rm = TRUE
+)
+
+clr_y_span <- clr_y_max_raw - clr_y_min_raw
+
+clr_y_min <- max(
+  0,
+  clr_y_min_raw - 0.08 * clr_y_span
+)
+
+clr_y_max <- min(
+  1,
+  clr_y_max_raw + 0.08 * clr_y_span
+)
+
+
+# ---------------------------------------------------------------------------
+# 5. Direct-label positions
+#
+# Labels are placed just inside the right side of each panel and nudged
+# vertically away from their fitted lines.
+# ---------------------------------------------------------------------------
+
+clr_x_span <- clr_plot_max - clr_plot_min
+
+clr_label_data_x <-
+  clr_plot_max - 0.05 * clr_x_span
+
+CLR_LineLabels <- CLR_Break_Lines %>%
+  dplyr::group_by(
+    Outcome,
+    Period
+  ) %>%
+  dplyr::slice_min(
+    order_by = abs(
+      clr_pre_z - clr_label_data_x
+    ),
+    n = 1,
+    with_ties = FALSE
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
+    
+    # Move the labels in opposite vertical directions.
+    Label_Y = Estimate +
+      dplyr::case_when(
+        Period == "1955–2004" ~
+          -0.040 * clr_y_span,
+        
+        Period == "2005–2008" ~
+          0.040 * clr_y_span,
+        
+        TRUE ~ 0
+      ),
+    
+    # Put the text slightly to the left of the line endpoint.
+    Label_X =
+      clr_pre_z - 0.025 * clr_x_span,
+    
+    # Short connector begins just to the left of the text.
+    Connector_X =
+      Label_X - 0.035 * clr_x_span
+  )
+
+
+# ---------------------------------------------------------------------------
+# 6. Colours
+#
+# These use colours already present in the paper's main-figure palette.
+# ---------------------------------------------------------------------------
+
+clr_period_colors <- c(
+  "1955–2004" = "#3288BD",
+  "2005–2008" = "#E9962F"
+)
+
+clr_period_fills <- c(
+  "1955–2004" = "#3288BD",
+  "2005–2008" = "#E9962F"
+)
+
+
+# ---------------------------------------------------------------------------
+# 7. Plot
+# ---------------------------------------------------------------------------
+
+p_clr_predecision_break <- ggplot2::ggplot(
+  CLR_Break_Lines,
+  ggplot2::aes(
+    x = clr_pre_z,
+    y = Estimate,
+    group = Period
+  )
+) +
+  
+  # 95% confidence bands
+  ggplot2::geom_ribbon(
+    ggplot2::aes(
+      ymin = CI_Lower,
+      ymax = CI_Upper,
+      fill = Period
+    ),
+    alpha = 0.13,
+    linewidth = 0,
+    show.legend = FALSE
+  ) +
+  
+  # White line underlay
+  ggplot2::geom_line(
+    color = "white",
+    linewidth = 1.15,
+    alpha = 0.95,
+    show.legend = FALSE
+  ) +
+  
+  # Fitted relationships
+  ggplot2::geom_line(
+    ggplot2::aes(
+      color = Period
+    ),
+    linewidth = 0.72,
+    alpha = 0.98,
+    show.legend = FALSE
+  ) +
+  
+  # Small coloured connector lines for direct labels
+  ggplot2::geom_segment(
+    data = CLR_LineLabels,
+    ggplot2::aes(
+      x = Connector_X,
+      xend = Label_X - 0.008 * clr_x_span,
+      y = Estimate,
+      yend = Label_Y,
+      color = Period
+    ),
+    inherit.aes = FALSE,
+    linewidth = 0.50,
+    show.legend = FALSE
+  ) +
+  
+  # Direct period labels
+  ggplot2::geom_text(
+    data = CLR_LineLabels,
+    ggplot2::aes(
+      x = Label_X,
+      y = Label_Y,
+      label = Period,
+      color = Period
+    ),
+    inherit.aes = FALSE,
+    hjust = 1,
+    size = 3.15,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  
+  # Side-by-side outcome panels
+  ggplot2::facet_wrap(
+    ~ Outcome,
+    nrow = 1
+  ) +
+  
+  ggplot2::scale_color_manual(
+    values = clr_period_colors
+  ) +
+  
+  ggplot2::scale_fill_manual(
+    values = clr_period_fills
+  ) +
+  
+  ggplot2::scale_x_continuous(
+    limits = c(
+      clr_plot_min,
+      clr_plot_max
+    ),
+    breaks = scales::breaks_pretty(n = 5),
+    expand = ggplot2::expansion(
+      mult = c(0, 0)
+    )
+  ) +
+  
+  ggplot2::scale_y_continuous(
+    limits = c(
+      clr_y_min,
+      clr_y_max
+    ),
+    breaks = scales::breaks_pretty(n = 5),
+    expand = ggplot2::expansion(
+      mult = c(0, 0)
+    )
+  ) +
+  
+  ggplot2::labs(
+    x = "Pre-decision salience in standard deviation units",
+    y = "Predicted appointment-party division"
+  ) +
+  
+  ggplot2::theme_minimal() +
+  
+  ggplot2::theme(
+    
+    # No title within the figure
+    plot.title = ggplot2::element_blank(),
+    
+    # Match the main-figure grid treatment
+    panel.grid.minor =
+      ggplot2::element_blank(),
+    
+    panel.grid.major.x =
+      ggplot2::element_blank(),
+    
+    # More breathing room between the two panels
+    panel.spacing.x =
+      grid::unit(2.5, "lines"),
+    
+    # Panel labels
+    strip.text =
+      ggplot2::element_text(
+        face = "bold",
+        hjust = 0.5
+      ),
+    
+    strip.background =
+      ggplot2::element_blank(),
+    
+    # Axes
+    axis.title.x =
+      ggplot2::element_text(
+        margin = ggplot2::margin(t = 10)
+      ),
+    
+    axis.title.y =
+      ggplot2::element_text(
+        margin = ggplot2::margin(r = 10)
+      ),
+    
+    # No detached legend
+    legend.position = "none",
+    
+    # Compact margins
+    plot.margin =
+      ggplot2::margin(
+        t = 5,
+        r = 8,
+        b = 5,
+        l = 5
+      )
+  )
+
+
+print(p_clr_predecision_break)
+
+
+# ---------------------------------------------------------------------------
+# 8. Save
+# ---------------------------------------------------------------------------
+
+ggplot2::ggsave(
+  filename = file.path(
+    fig_dir,
+    "07_clr_predecision_salience_breakpoint.emf"
+  ),
+  plot = p_clr_predecision_break,
+  device = devEMF::emf,
+  width = 6.27,
+  height = 3.65,
+  units = "in"
+)
+```
+
+## Direct contamination test
+
+### Purpose
+
+Model CSI as the outcome and test whether coalition structure predicts coverage while holding exact vote configuration, issue area, and Supreme Court term constant. Strict-split and continuous raw-`|\phi|` specifications test the average association, continuous historical change, and the carried-over breakpoint.
+
+**Created objects**
+
+- **Contamination_Data** — contested cases used for the decision-coverage contamination diagnostics.
+
+- **m_contam_strict_level** — model estimating the average CSI difference between strict appointment-party splits and mixed coalitions.
+
+- **m_contam_strict_time** — model estimating change in the strict-split CSI difference over time.
+
+- **m_contam_strict_break** — model estimating change in the strict-split CSI difference after the carried-over breakpoint.
+
+- **m_contam_phi_time** — continuous absolute-∣ϕ∣\|\\phi\| model estimating change in the CSI–alignment relationship over time.
+
+- **m_contam_phi_break** — continuous absolute-∣ϕ∣\|\\phi\| model estimating change in the CSI–alignment relationship after the breakpoint.
+
+- **Contamination_R2_Results** — full and incremental R2R\^2 values for the contamination diagnostics.
+
+- **Contamination_R2_Table** — compact model-fit table for the contamination diagnostics.
+
+- **Contamination_Results** — clustered coefficient estimates from the contamination models.
+
+- **Contamination_Table** — reader-facing summary of the contamination estimates.
+
+```{r csi-decision-coverage-contamination, warning=FALSE}
+
+# --- Does the voting coalition itself predict CSI? -------------------------
+# Hold vote configuration, issue area, and Supreme Court term constant.
+
+Contamination_Data <- SCOTUS_Contested %>%
+  dplyr::filter(
+    term >= analysis_start_term, term <= analysis_end_term,
+    !is.na(csi), !is.na(strict_party_split), !is.na(phi_abs),
+    !is.na(majVotes), !is.na(minVotes)) %>%
+  dplyr::mutate(
+    Strict_Split = as.integer(strict_party_split),
+    Contam_Time_Decade = (term - 2000) / 10,
+    Contam_PostBreak = as.integer(term >= estimated_break_term),
+    Vote_Configuration = factor(paste0(majVotes, "-", minVotes)),
+    Issue_Area_Factor = factor(dplyr::if_else(
+      is.na(issueArea), "Missing", as.character(issueArea))))
+
+contamination_cluster_df <-
+  dplyr::n_distinct(Contamination_Data$term) - 1L
+
+# ---------------------------------------------------------------------------
+# Coverage models
+# ---------------------------------------------------------------------------
+
+m_contam_strict_level <- stats::lm(
+  csi ~ Strict_Split + Vote_Configuration + Issue_Area_Factor +
+    factor(term),
+  data = Contamination_Data)
+vcov_contam_strict_level <- cluster_vcov(
+  m_contam_strict_level, Contamination_Data$term)
+
+m_contam_strict_time <- stats::lm(
+  csi ~ Strict_Split + Strict_Split:Contam_Time_Decade +
+    Vote_Configuration + Issue_Area_Factor + factor(term),
+  data = Contamination_Data)
+vcov_contam_strict_time <- cluster_vcov(
+  m_contam_strict_time, Contamination_Data$term)
+
+m_contam_strict_break <- stats::lm(
+  csi ~ Strict_Split + Strict_Split:Contam_PostBreak +
+    Vote_Configuration + Issue_Area_Factor + factor(term),
+  data = Contamination_Data)
+vcov_contam_strict_break <- cluster_vcov(
+  m_contam_strict_break, Contamination_Data$term)
+
+m_contam_phi_time <- stats::lm(
+  csi ~ phi_abs + phi_abs:Contam_Time_Decade + Vote_Configuration +
+    Issue_Area_Factor + factor(term),
+  data = Contamination_Data)
+vcov_contam_phi_time <- cluster_vcov(
+  m_contam_phi_time, Contamination_Data$term)
+
+m_contam_phi_break <- stats::lm(
+  csi ~ phi_abs + phi_abs:Contam_PostBreak + Vote_Configuration +
+    Issue_Area_Factor + factor(term),
+  data = Contamination_Data)
+vcov_contam_phi_break <- cluster_vcov(
+  m_contam_phi_break, Contamination_Data$term)
+
+
+# ---------------------------------------------------------------------------
+# Incremental R-squared for contamination diagnostics
+# ---------------------------------------------------------------------------
+
+m_contam_controls <- stats::lm(
+  csi ~ Vote_Configuration + Issue_Area_Factor + factor(term),
+  data = Contamination_Data)
+
+m_contam_phi_level <- stats::lm(
+  csi ~ phi_abs + Vote_Configuration + Issue_Area_Factor + factor(term),
+  data = Contamination_Data)
+
+Contamination_R2_Results <- dplyr::bind_rows(
+  model_fit_r2(
+    full_model = m_contam_strict_level,
+    reduced_model = m_contam_controls,
+    outcome = "Case Salience Index",
+    specification = "Strict split: average coverage difference",
+    added_terms = "Strict split"),
+  model_fit_r2(
+    full_model = m_contam_strict_time,
+    reduced_model = m_contam_strict_level,
+    outcome = "Case Salience Index",
+    specification = "Strict split: continuous time",
+    added_terms = "Strict split × time"),
+  model_fit_r2(
+    full_model = m_contam_strict_break,
+    reduced_model = m_contam_strict_level,
+    outcome = "Case Salience Index",
+    specification = paste0(
+      "Strict split: OT", estimated_break_term, " break"),
+    added_terms = "Strict split × post-break"),
+  model_fit_r2(
+    full_model = m_contam_phi_time,
+    reduced_model = m_contam_phi_level,
+    outcome = "Case Salience Index",
+    specification = "Absolute phi: continuous time",
+    added_terms = "|phi| × time"),
+  model_fit_r2(
+    full_model = m_contam_phi_break,
+    reduced_model = m_contam_phi_level,
+    outcome = "Case Salience Index",
+    specification = paste0(
+      "Absolute phi: OT", estimated_break_term, " break"),
+    added_terms = "|phi| × post-break")) %>%
+  dplyr::mutate(
+    Additional_Variance_PP = 100 * Incremental_R2)
+
+Contamination_R2_Table <- Contamination_R2_Results %>%
+  dplyr::transmute(
+    Specification,
+    `R²` = sprintf("%.4f", R2),
+    `Incremental R²` = sprintf("%.4f", Incremental_R2),
+    `Additional variance explained (%)` =
+      sprintf("%.2f", Additional_Variance_PP))
+
+knitr::kable(
+  Contamination_R2_Table,
+  caption = paste0(
+    "Model fit for decision-coverage contamination diagnostics ",
+    "(pp = percentage points)"),
+  booktabs = TRUE,
+  align = c("l", "r", "r", "r"))
+
+# ---------------------------------------------------------------------------
+# Extract the quantities that address the contamination concern
+# ---------------------------------------------------------------------------
+
+contam_strict_break_label <- paste0(
+  "Strict split: OT", estimated_break_term, " break")
+contam_phi_break_label <- paste0(
+  "Absolute phi: OT", estimated_break_term, " break")
+
+Contamination_Results <- dplyr::bind_rows(
+  cluster_contrast(
+    model = m_contam_strict_level,
+    vcov_matrix = vcov_contam_strict_level,
+    weights = c("Strict_Split" = 1),
+    cluster_df = contamination_cluster_df,
+    outcome = "Case Salience Index",
+    specification = "Strict split: average coverage difference",
+    quantity = "CSI difference: strict vs mixed coalition"),
+  cluster_contrast(
+    model = m_contam_strict_time,
+    vcov_matrix = vcov_contam_strict_time,
+    weights = c("Strict_Split:Contam_Time_Decade" = 1),
+    cluster_df = contamination_cluster_df,
+    outcome = "Case Salience Index",
+    specification = "Strict split: continuous time",
+    quantity = "Change in CSI difference per decade"),
+  cluster_contrast(
+    model = m_contam_strict_break,
+    vcov_matrix = vcov_contam_strict_break,
+    weights = c("Strict_Split:Contam_PostBreak" = 1),
+    cluster_df = contamination_cluster_df,
+    outcome = "Case Salience Index",
+    specification = contam_strict_break_label,
+    quantity = "Change in CSI difference after breakpoint"),
+  cluster_contrast(
+    model = m_contam_phi_time,
+    vcov_matrix = vcov_contam_phi_time,
+    weights = c("phi_abs:Contam_Time_Decade" = 1),
+    cluster_df = contamination_cluster_df,
+    outcome = "Case Salience Index",
+    specification = "Absolute phi: continuous time",
+    quantity = "Change in CSI-|phi| association per decade"),
+  cluster_contrast(
+    model = m_contam_phi_break,
+    vcov_matrix = vcov_contam_phi_break,
+    weights = c("phi_abs:Contam_PostBreak" = 1),
+    cluster_df = contamination_cluster_df,
+    outcome = "Case Salience Index",
+    specification = contam_phi_break_label,
+    quantity = "Change in CSI-|phi| association after breakpoint"))
+
+Contamination_Table <- Contamination_Results %>%
+  dplyr::mutate(
+    `95% CI` = sprintf("%.3f to %.3f", CI_Lower, CI_Upper),
+    `p value` = dplyr::if_else(
+      P_Value < 0.001, "<0.001", sprintf("%.3f", P_Value))) %>%
+  dplyr::transmute(
+    Specification, Quantity,
+    Estimate = round(Estimate, 3),
+    `Clustered SE` = round(Clustered_SE, 3),
+    `95% CI`, `p value`)
+
+knitr::kable(
+  Contamination_Table,
+  caption = "Decision-coverage contamination diagnostics",
+  booktabs = TRUE,
+  align = c("l", "l", "r", "r", "l", "r"))
+
+rm(contam_strict_break_label, contam_phi_break_label)
 ```
 
 # Inferential Robustness Checks
 
 ### Purpose
 
-The following code evaluates whether the principal inferential result depends on alternative modeling choices or sample definitions.
+Test the principal interaction under issue-area controls, alternative contested-case definitions, the estimated breakpoint, fractional-logit models, and the strict-split outcome. Because the estimated breakpoint was selected from the same data, that specification remains a sensitivity analysis rather than an independent confirmatory test.
 
-The robustness analysis first adds SCDB issue-area controls to determine whether the changing salience–alignment relationship can be explained by changes in the substantive composition of the Court's docket. It then estimates the OT2010 interaction using alternative definitions of a contested case: all non-unanimous cases, the principal two-or-more-minority-vote sample, and cases with at least three minority votes.
-
-A further sensitivity model replaces OT2010 with the **data-driven breakpoint identified by the raw-phi breakpoint analysis**. Because this breakpoint was selected from the same data, its coefficient is treated as a sensitivity estimate rather than as an independent confirmatory test.
-
-Fractional-logit models provide a nonlinear robustness check appropriate to outcomes bounded between zero and one. Finally, a linear-probability model applies the same continuous-salience specification to the intuitive binary strict appointing-party split outcome.
-
-### Created objects
+**Created objects**
 
 - **Robustness_Issue_Results** — OT2010 interaction estimates with issue-area controls.
 
@@ -4616,11 +5764,13 @@ Fractional-logit models provide a nonlinear robustness check appropriate to outc
 
 - **Robustness_Break_Results** — sensitivity estimates using the data-driven breakpoint.
 
-- **Robustness_Fractional_Results** — fractional-logit interaction estimates.
+- **Robustness_Fractional_Results** — fractional-logit robustness estimates.
 
-- **Robustness_Strict_Results** — strict-split linear-probability results.
+- **Robustness_Strict_Results** — strict-split linear-probability estimates.
 
-- **Robustness_Model_Table** — publication-facing comparison of robustness estimates.
+- **Robustness_Model_Results** — combined results from all inferential robustness checks.
+
+- **Robustness_Model_Table** — reader-facing comparison of the robustness estimates.
 
 ```{r inferential-robustness-checks}
 
@@ -4637,22 +5787,30 @@ extract_clustered_coefficient <- function(
   
   cluster_degrees_freedom <- dplyr::n_distinct(cluster) - 1L
   
+  model_r2 <- if (inherits(model, "glm")) {
+    NA_real_
+  } else {
+    summary(model)$r.squared
+  }
+  
   cluster_contrast(
     model = model, vcov_matrix = vcov_matrix, weights =
       stats::setNames(1, coefficient), cluster_df =
       cluster_degrees_freedom, outcome = outcome, specification =
-      specification, quantity = "Change in CSI slope")
+      specification, quantity = "Change in CSI slope") %>%
+    dplyr::mutate(R2 = model_r2)
 }
 
 # ---------------------------------------------------------------------------
 # Issue-area controls
 # ---------------------------------------------------------------------------
 
-Model_Data_Issue <- Model_Data %>% dplyr::filter(!is.na(issueArea))
+Model_Data_Issue <- Model_Data %>%
+  dplyr::filter(!is.na(issueArea))
 
 m_phi_post2010_issue <- stats::lm(
-  phi_abs ~ csi + csi:Post2010 + factor(term) + factor(issueArea), data =
-    Model_Data_Issue)
+  phi_abs ~ csi + csi:Post2010 + factor(term) + factor(issueArea),
+  data = Model_Data_Issue)
 
 m_phi_normalized_post2010_issue <- stats::lm(
   phi_normalized ~ csi + csi:Post2010 + factor(term) + factor(issueArea),
@@ -4661,15 +5819,19 @@ m_phi_normalized_post2010_issue <- stats::lm(
 Robustness_Issue_Results <- dplyr::bind_rows(
   
   extract_clustered_coefficient(
-    model = m_phi_post2010_issue, cluster = Model_Data_Issue$term,
-    coefficient = "csi:Post2010", outcome = "Mean absolute phi",
+    model = m_phi_post2010_issue,
+    cluster = Model_Data_Issue$term,
+    coefficient = "csi:Post2010",
+    outcome = "Mean absolute phi",
     specification = "OT2010 break + issue-area controls"),
   
   extract_clustered_coefficient(
-    model = m_phi_normalized_post2010_issue, cluster =
-      Model_Data_Issue$term, coefficient = "csi:Post2010", outcome =
-      "Margin-normalized phi", specification =
-      "OT2010 break + issue-area controls"))
+    model = m_phi_normalized_post2010_issue,
+    cluster = Model_Data_Issue$term,
+    coefficient = "csi:Post2010",
+    outcome = "Margin-normalized phi",
+    specification = "OT2010 break + issue-area controls")
+)
 
 # ---------------------------------------------------------------------------
 # Alternative definitions of a contested case
@@ -4681,117 +5843,159 @@ robustness_samples <- list(
   
   `2+ minority votes` = SCOTUS_Contested,
   
-  `3+ minority votes` = SCOTUS_CloselyDivided)
+  `3+ minority votes` = SCOTUS_CloselyDivided
+)
 
 fit_sample_robustness <- function(
     data, sample_label, outcome) {
   
-  d <- data %>% dplyr::filter(
-      term >= analysis_start_term, term <= analysis_end_term, !is.na(csi),
-      !is.na(.data[[outcome]])) %>%
-    dplyr::mutate(Post2010 = as.integer(term >= 2010))
+  d <- data %>%
+    dplyr::filter(
+      term >= analysis_start_term,
+      term <= analysis_end_term,
+      !is.na(csi),
+      !is.na(.data[[outcome]])
+    ) %>%
+    dplyr::mutate(
+      Post2010 = as.integer(term >= 2010)
+    )
   
   model <- stats::lm(
     stats::as.formula(
-      paste0(outcome, " ~ csi + csi:Post2010 + factor(term)")), data = d
-)
+      paste0(outcome, " ~ csi + csi:Post2010 + factor(term)")
+    ),
+    data = d
+  )
   
   extract_clustered_coefficient(
-    model = model, cluster = d$term, coefficient = "csi:Post2010", outcome =
-      dplyr::case_when(
-        outcome == "phi_abs" ~ "Mean absolute phi",
-        outcome == "phi_normalized" ~ "Margin-normalized phi", TRUE ~
-          outcome), specification =
-      paste0("OT2010 break: ", sample_label))
+    model = model,
+    cluster = d$term,
+    coefficient = "csi:Post2010",
+    outcome = dplyr::case_when(
+      outcome == "phi_abs" ~ "Mean absolute phi",
+      outcome == "phi_normalized" ~ "Margin-normalized phi",
+      TRUE ~ outcome
+    ),
+    specification = paste0("OT2010 break: ", sample_label)
+  )
 }
 
 Robustness_Sample_Results <- purrr::imap_dfr(
-  robustness_samples, function(data, sample_label) {
+  robustness_samples,
+  function(data, sample_label) {
     
     dplyr::bind_rows(
       
       fit_sample_robustness(
-        data = data, sample_label = sample_label, outcome = "phi_abs"),
+        data = data,
+        sample_label = sample_label,
+        outcome = "phi_abs"),
       
       fit_sample_robustness(
-        data = data, sample_label = sample_label, outcome = "phi_normalized"
-))
-  })
+        data = data,
+        sample_label = sample_label,
+        outcome = "phi_normalized")
+    )
+  }
+)
 
 # ---------------------------------------------------------------------------
 # Data-driven breakpoint sensitivity
 # ---------------------------------------------------------------------------
 
-break_term_sensitivity <- Breakpoint_Best_Raw$Break_Term[
-    1]
-
 Model_Data_Break <- Model_Data %>%
-  dplyr::mutate(PostBreak = as.integer(term >= break_term_sensitivity))
+  dplyr::mutate(
+    PostBreak = as.integer(term >= estimated_break_term)
+  )
 
 m_phi_databreak <- stats::lm(
-  phi_abs ~ csi + csi:PostBreak + factor(term), data = Model_Data_Break)
+  phi_abs ~ csi + csi:PostBreak + factor(term),
+  data = Model_Data_Break)
 
 m_phi_normalized_databreak <- stats::lm(
-  phi_normalized ~ csi + csi:PostBreak + factor(term), data =
-    Model_Data_Break)
+  phi_normalized ~ csi + csi:PostBreak + factor(term),
+  data = Model_Data_Break)
 
 Robustness_Break_Results <- dplyr::bind_rows(
   
   extract_clustered_coefficient(
-    model = m_phi_databreak, cluster = Model_Data_Break$term, coefficient =
-      "csi:PostBreak", outcome = "Mean absolute phi", specification =
-      paste0("Data-driven break at OT", break_term_sensitivity)),
+    model = m_phi_databreak,
+    cluster = Model_Data_Break$term,
+    coefficient = "csi:PostBreak",
+    outcome = "Mean absolute phi",
+    specification = paste0(
+      "Data-driven break at OT", estimated_break_term)),
   
   extract_clustered_coefficient(
-    model = m_phi_normalized_databreak, cluster = Model_Data_Break$term,
-    coefficient = "csi:PostBreak", outcome = "Margin-normalized phi",
-    specification =
-      paste0("Data-driven break at OT", break_term_sensitivity)))
+    model = m_phi_normalized_databreak,
+    cluster = Model_Data_Break$term,
+    coefficient = "csi:PostBreak",
+    outcome = "Margin-normalized phi",
+    specification = paste0(
+      "Data-driven break at OT", estimated_break_term))
+)
 
 # ---------------------------------------------------------------------------
 # Fractional-logit robustness
 # ---------------------------------------------------------------------------
 
 m_phi_fractional <- stats::glm(
-  phi_abs ~ csi + csi:Post2010 + factor(term), family =
-    stats::quasibinomial(link = "logit"), data = Model_Data)
+  phi_abs ~ csi + csi:Post2010 + factor(term),
+  family = stats::quasibinomial(link = "logit"),
+  data = Model_Data)
 
 m_phi_normalized_fractional <- stats::glm(
-  phi_normalized ~ csi + csi:Post2010 + factor(term), family =
-    stats::quasibinomial(link = "logit"), data = Model_Data)
+  phi_normalized ~ csi + csi:Post2010 + factor(term),
+  family = stats::quasibinomial(link = "logit"),
+  data = Model_Data)
 
 Robustness_Fractional_Results <- dplyr::bind_rows(
   
   extract_clustered_coefficient(
-    model = m_phi_fractional, cluster = Model_Data$term, coefficient =
-      "csi:Post2010", outcome = "Mean absolute phi", specification =
-      "Fractional logit, OT2010 break"),
+    model = m_phi_fractional,
+    cluster = Model_Data$term,
+    coefficient = "csi:Post2010",
+    outcome = "Mean absolute phi",
+    specification = "Fractional logit, OT2010 break"),
   
   extract_clustered_coefficient(
-    model = m_phi_normalized_fractional, cluster = Model_Data$term,
-    coefficient = "csi:Post2010", outcome = "Margin-normalized phi",
-    specification = "Fractional logit, OT2010 break"))
+    model = m_phi_normalized_fractional,
+    cluster = Model_Data$term,
+    coefficient = "csi:Post2010",
+    outcome = "Margin-normalized phi",
+    specification = "Fractional logit, OT2010 break")
+)
 
 # ---------------------------------------------------------------------------
 # Strict appointing-party split as a secondary binary outcome
 # ---------------------------------------------------------------------------
 
-Model_Data_Strict <- SCOTUS_Contested %>% dplyr::filter(
-    term >= analysis_start_term, term <= analysis_end_term, !is.na(csi),
-    !is.na(strict_party_split)) %>% dplyr::mutate(
+Model_Data_Strict <- SCOTUS_Contested %>%
+  dplyr::filter(
+    term >= analysis_start_term,
+    term <= analysis_end_term,
+    !is.na(csi),
+    !is.na(strict_party_split)
+  ) %>%
+  dplyr::mutate(
     
     Post2010 = as.integer(term >= 2010),
     
-    Strict_Split = as.integer(strict_party_split))
+    Strict_Split = as.integer(strict_party_split)
+  )
 
 m_strict_lpm <- stats::lm(
-  Strict_Split ~ csi + csi:Post2010 + factor(term), data = Model_Data_Strict
+  Strict_Split ~ csi + csi:Post2010 + factor(term),
+  data = Model_Data_Strict
 )
 
 Robustness_Strict_Results <- extract_clustered_coefficient(
-  model = m_strict_lpm, cluster = Model_Data_Strict$term, coefficient =
-    "csi:Post2010", outcome = "Strict appointing-party split",
-  specification = "Linear probability model, OT2010 break")
+  model = m_strict_lpm,
+  cluster = Model_Data_Strict$term,
+  coefficient = "csi:Post2010",
+  outcome = "Strict appointing-party split",
+  specification = "Linear probability model, OT2010 break"
+)
 
 # ---------------------------------------------------------------------------
 # Combine results
@@ -4807,19 +6011,34 @@ Robustness_Model_Results <- dplyr::bind_rows(
   
   Robustness_Fractional_Results,
   
-  Robustness_Strict_Results)
+  Robustness_Strict_Results
+)
 
 # ---------------------------------------------------------------------------
 # Publication-facing robustness table
 # ---------------------------------------------------------------------------
 
-Robustness_Model_Table <- Robustness_Model_Results %>% dplyr::mutate(
+Robustness_Model_Table <- Robustness_Model_Results %>%
+  dplyr::mutate(
     
     `95% CI` = paste0(
-        sprintf("%.3f", CI_Lower), " to ", sprintf("%.3f", CI_Upper)),
+      sprintf("%.3f", CI_Lower),
+      " to ",
+      sprintf("%.3f", CI_Upper)
+    ),
     
     `p value` = dplyr::if_else(
-        P_Value < 0.001, "<0.001", sprintf("%.3f", P_Value))) %>%
+      P_Value < 0.001,
+      "<0.001",
+      sprintf("%.3f", P_Value)
+    ),
+    
+    `R²` = dplyr::if_else(
+      is.na(R2),
+      "—",
+      sprintf("%.4f", R2)
+    )
+  ) %>%
   dplyr::transmute(
     
     Outcome,
@@ -4832,13 +6051,18 @@ Robustness_Model_Table <- Robustness_Model_Results %>% dplyr::mutate(
     
     `95% CI`,
     
-    `p value`)
+    `p value`,
+    
+    `R²`
+  )
 
 knitr::kable(
-  Robustness_Model_Table, caption =
-    paste0(
-      "Robustness of the changing relationship between case salience ",
-      "and appointing-party alignment"
-),
-  booktabs = TRUE, align = c("l", "l", "r", "r", "l", "r"))
+  Robustness_Model_Table,
+  caption = paste0(
+    "Robustness of the changing relationship between case salience ",
+    "and appointing-party alignment"
+  ),
+  booktabs = TRUE,
+  align = c("l", "l", "r", "r", "l", "r", "r")
+)
 ```
