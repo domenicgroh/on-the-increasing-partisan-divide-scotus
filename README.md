@@ -12,6 +12,12 @@ and documentation for the source data used in the study.
 - `Analysis.pdf` — rendered version of the analysis.
 - `data/` — documentation for obtaining the external source datasets used in the analysis.
 
+## Archived replication package
+
+Version 1.1.0 of these replication materials is permanently archived on Zenodo:
+
+**DOI:** [10.5281/zenodo.22819677](https://doi.org/10.5281/zenodo.22819677)
+
 ## Data sources
 
 The analysis combines three principal data sources:
